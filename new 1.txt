@@ -1,0 +1,84 @@
+import dlib
+from math import hypot
+import math
+
+# 讀取人臉辨識模型
+detector = dlib.get_frontal_face_detector()
+
+# 讀取人臉辨識之特徵模型
+predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+
+# 讀取影像（人臉與豬鼻子）
+img = cv2.imread("Posting a Picture - Test.png")
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+black_pig = cv2.imread('black_pig.jpg')
+
+# 影像維度
+(h,w,c) = img.shape
+
+# 影像代入人臉辨識模型，需帶入RGB影像
+face = detector(img)
+print("人臉之位置", face)
+
+# 轉成灰階影像
+img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+# 將多個人臉帶入迴圈中
+for face in face:
+    
+    # 使用灰階影像偵測臉特徵的詳細位置
+    landmarks = predictor(img_gray, face)
+    
+    # 獲得鼻子上方、中間、左邊及右邊的座標位置
+    top_nose = (landmarks.part(29).x, landmarks.part(29).y)
+    center_nose = (landmarks.part(30).x, landmarks.part(30).y)
+    left_nose = (landmarks.part(31).x, landmarks.part(31).y)
+    right_nose = (landmarks.part(35).x, landmarks.part(35).y)
+    
+    # 計算角度
+    nose_angle = float(-math.atan((right_nose[1]-left_nose[1])/(right_nose[0]-left_nose[0]))*180/3.14159)
+    black_pig = rotate(black_pig, nose_angle)
+    
+    # 計算鼻子寬(鼻子左邊至右邊的歐式距離)，高度則是一樣（原因鼻子大小高寬相同），並定於2.2倍
+    nose_width = int(hypot(left_nose[0]-right_nose[0],left_nose[1]-right_nose[1])*2.2)
+    nose_height = int(nose_width)
+    
+    # 鼻子左上與右下的位置，即正方形
+    top_left = (int(center_nose[0]-nose_width/2),int(center_nose[1]-nose_width/2))
+    bottom_right = (int(center_nose[0]-nose_width/2),int(center_nose[1]-nose_width/2))
+    
+    # 改變豬鼻子大小，與我鼻子同寬高
+    nose_pig = cv2.resize(black_pig, (nose_width, nose_height))
+    plt.imshow(nose_pig)
+    plt.show()
+    
+    # 豬鼻子變成灰階, 使用閥值變成二值化
+    nose_pig_gray = cv2.cvtColor(nose_pig, cv2.COLOR_BGR2GRAY)
+    _, nose_mask = cv2.threshold(nose_pig_gray, 25, 255, cv2.THRESH_BINARY_INV)
+    plt.imshow(nose_mask, cmap ='gray')
+    plt.show()
+    
+    # 條件式判斷貼圖是否會貼超出畫面
+    if top_left[1]<0 or top_left[0]<0 or bottom_right[1]>h or bottom_right[0]>w:
+        continue
+    
+    # 豬鼻子預放入的區域大小之鼻子部分
+    nose_area = img[top_left[1]: top_left[1]+nose_height, top_left[0]: top_left[0]+nose_width]
+    plt.imshow(nose_area)
+    plt.show()
+    
+    # 每個畫素值進行二進位制“&”操作，1&1=1，1&0=0，0&1=0，0&0=0，
+    nose_area_no_nose = cv2.bitwise_and(nose_area,nose_area,mask=nose_mask)
+    plt.imshow(nose_area_no_nose)
+    plt.show()
+    
+    # 將豬鼻子與真鼻子外影像結合的矩形
+    final_nose = cv2.add(nose_area_no_nose, nose_pig)
+    plt.imshow(final_nose)
+    plt.show()
+    
+    # 將矩形放入原來影像之矩形
+    img[top_left[1]: top_left[1]+nose_height, top_left[0]: top_left[0]+nose_width] = final_nose
+    plt.figure(figsize=(15,13))
+    plt.imshow(img)
+    plt.show()
